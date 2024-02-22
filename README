@@ -8,3 +8,4 @@ Ejemplos para la clase de CCOM4087 - Compiladores
 02depython - un interpretador para un subconjunto de python
 03enteros  - el compilador para enteros de Ben Lerner
 04epcp     - el compilador de enteros, pero con parser
+05incdec   - el compilador de enteros, con incremento y decremento
