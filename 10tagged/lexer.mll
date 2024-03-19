@@ -23,4 +23,7 @@ rule read =
      | "dec" { DEC }
      | "let" { LET }
      | "if"  { IF }
+     | '+'   { PLUS }
+     | '*'   { TIMES }
      | id   { ID (Lexing.lexeme lexbuf) }
+     | _ { raise (SyntaxError ("Illegal character - " ^ Lexing.lexeme lexbuf)) }
