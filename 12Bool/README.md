@@ -1,36 +1,38 @@
-# Adding Booleans to our compiler
+# Tagged Compiler for BinOp
 
-Following the recommendations in [Lecture
-5](https://course.ccs.neu.edu/cs4410/lec_tagging-values_notes.html), we will add
-Booleans to our compiler.
+Wierd errors?
+```
+File "front.ml", line 4, characters 5-9:
+4 | open Core
+         ^^^^
+Error: Unbound module Core
+```
+do `opam install core`.
 
-The compiler is currently half broken, but we can parse some expressions, and
-tag them, anf them and even compile some of them:
+This compiler can parse binary operations:
 
 ```
-$ dune build
-$ dune utop
-utop# #use "load.ml";;
-utop # let input_file = open_in "true.int";;
-val input_file : in_channel = <abstr>
-─( 15:15:06 )─< command 2 >────────────────────────────────────{ counter: 0 }─
-utop # let Ok(program) = Front.parse_file input_file;;
-Line 1, characters 4-15:
-Warning 8: this pattern-matching is not exhaustive.
-Here is an example of a case that is not matched:
-Error _
-val program : Lexing.position ast =
-  Bool (true,
-   {Lexing.pos_fname = ""; pos_lnum = 1; pos_bol = 0; pos_cnum = 0})
-─( 15:15:17 )─< command 3 >────────────────────────────────────{ counter: 0 }─
-utop # let tagged = tag program;;
-val tagged : tag ast = Bool (true, 1)
-─( 15:15:23 )─< command 4 >────────────────────────────────────{ counter: 0 }─
-utop # let anfed = anf tagged;;
-val anfed : tag aexpr = AImm (ImmBool true, 1)
-─( 15:16:06 )─< command 5 >────────────────────────────────────{ counter: 0 }─
-utop # compile_expr anfed [];;
-- : instruction list = [Mov (Reg RAX, Const (-1))]
+$ cat unoydos.int
+((inc 0) + 2)
+$ make unoydos.run
+dune exec ./compiler.exe unoydos.int > unoydos.s
+nasm -f elf64 -o unoydos.o unoydos.s
+clang -g -m64 -o unoydos.run main.c unoydos.o
+rm unoydos.s unoydos.o
+$ ./unoydos.run
+3
 ```
 
-We still need to fix a *bunch* of stuff.
+And even better, gives compiler errors for invalid syntax.
+
+```
+$ cat > badplus.int
+(1 ++ 2)
+$ make badplus.run
+dune exec ./compiler.exe badplus.int > badplus.s
+Line:1 Position:6: syntax error
+make: *** [Makefile:8: badplus.s] Error 1
+rm badplus.s
+```
+
+The cost? A 142-line change to 6 source files, including a whole new file for the compiler front-end. Plus installing 60 or so packages in opam (827MB in `~/.opam/default/lib`).

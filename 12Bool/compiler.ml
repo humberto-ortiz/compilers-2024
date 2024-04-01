@@ -13,6 +13,7 @@ type instruction =
   | Add of arg * arg
   | Mul of arg * arg
   | Cmp of arg * arg
+  | Sar of arg * arg
   | Jnz of string
   | Jmp of string
   | Label of string
@@ -56,26 +57,28 @@ let rec anf (e : tag ast) : tag aexpr =
                    APrim2 (op, ImmId tmpvar1, ImmId tmpvar2, tag), tag), tag)
 
 let const_true = -1
+let const_false = 1
 
 let rec compile_expr (e : tag aexpr) (env : env) : instruction list =
   let imm_to_arg (e : immexpr) =
     match e with
       | ImmNum n ->
-         Const n 
+         Const (n * 2) 
       | ImmId v ->
          let slot = lookup (v, env) in
          RegOffset(RSP, ~-8*slot)
       | ImmBool true -> Const const_true
+      | ImmBool false -> Const const_false
   in
   match e with
   | AImm (imm, _) -> 
      [Mov (Reg RAX, imm_to_arg imm) ]
   | AAdd1 (inc1, _) ->
      [ Mov (Reg RAX, imm_to_arg inc1) ; 
-       Add (Reg RAX, Const 1) ]
+       Add (Reg RAX, Const 2) ]
   | ASub1 (dec1, _) ->
      [ Mov (Reg RAX, imm_to_arg dec1) ;
-       Add (Reg RAX, Const ~-1) ]
+       Add (Reg RAX, Const ~-2) ] (* la representacion de -1 es -2 *)
   | ALet (let1, valor, valor2, _) ->
      let (slot, env') = guardar (let1, env) in
      compile_expr valor env @
@@ -86,7 +89,7 @@ let rec compile_expr (e : tag aexpr) (env : env) : instruction list =
      let lf = sprintf "if_false_%d" tag in
      let ld = sprintf "done_%d" tag in
      [ Mov (Reg RAX, imm_to_arg e1) ;
-       Cmp (Reg RAX, Const 0) ;
+       Cmp (Reg RAX, Const const_false) ;
        Jnz lt ;
        Label lf ] @
        compile_expr e3 env
@@ -99,8 +102,21 @@ let rec compile_expr (e : tag aexpr) (env : env) : instruction list =
        Add (Reg RAX, imm_to_arg imm2) ]
   | APrim2 (Mul, imm1, imm2, _) ->
      [ Mov (Reg RAX, imm_to_arg imm1) ;
-       Mul (Reg RAX, imm_to_arg imm2) ]
-     
+       Mul (Reg RAX, imm_to_arg imm2) ;
+       Sar (Reg RAX, Const 1) ]
+  | APrim2 (Equal, imm1, imm2, tag) ->
+     let ld = sprintf "done_%d" tag in
+     let lf = sprintf "false_%d" tag in
+     [ Mov (Reg RAX, imm_to_arg imm1) ;
+       Cmp (Reg RAX, imm_to_arg imm2) ;
+       Jnz lf ;
+       Mov (Reg RAX, Const const_true) ;
+       Jmp ld ;
+       Label lf ;
+       Mov (Reg RAX, Const const_false);
+       Label ld
+     ]
+  (* | _ -> failwith "no se compilar eso" *)
 
 
 let rec asm_to_string instrs =
@@ -113,6 +129,7 @@ and inst_to_string inst =
     | Mov (a1, a2) -> "mov " ^ (arg_to_string a1) ^ ", " ^ (arg_to_string a2) ^ "\n"
     | Add (a1, a2) -> "add " ^ (arg_to_string a1) ^ ", " ^ (arg_to_string a2) ^ "\n"
     | Mul (a1, a2) -> "imul " ^ (arg_to_string a1) ^ ", " ^ (arg_to_string a2) ^ "\n"
+    | Sar (a1, a2) -> "sar " ^ (arg_to_string a1) ^ ", " ^ (arg_to_string a2) ^ "\n"
     | Jnz label -> "jnz " ^ label ^ "\n"
     | Jmp label -> "jmp " ^ label ^ "\n"
     | Label label -> label ^ ":\n"
