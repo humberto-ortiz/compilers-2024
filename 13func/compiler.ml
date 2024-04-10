@@ -13,6 +13,7 @@ type instruction =
   | Add of arg * arg
   | Mul of arg * arg
   | Cmp of arg * arg
+  | Test of arg * arg
   | Sar of arg * arg
   | Jnz of string
   | Jmp of string
@@ -75,9 +76,13 @@ let rec compile_expr (e : tag aexpr) (env : env) : instruction list =
      [Mov (Reg RAX, imm_to_arg imm) ]
   | AAdd1 (inc1, _) ->
      [ Mov (Reg RAX, imm_to_arg inc1) ; 
+       Test (Reg RAX, Const 0x0001) ;
+       Jmp "error_not_number";
        Add (Reg RAX, Const 2) ]
   | ASub1 (dec1, _) ->
      [ Mov (Reg RAX, imm_to_arg dec1) ;
+       Test (Reg RAX, Const 0x0001) ;
+       Jmp "error_not_number";
        Add (Reg RAX, Const ~-2) ] (* la representacion de -1 es -2 *)
   | ALet (let1, valor, valor2, _) ->
      let (slot, env') = guardar (let1, env) in
@@ -99,9 +104,21 @@ let rec compile_expr (e : tag aexpr) (env : env) : instruction list =
        @ [ Label ld ]
   | APrim2 (Add, imm1, imm2, _) ->
      [ Mov (Reg RAX, imm_to_arg imm1) ;
+       Test (Reg RAX, Const 0x0001) ;
+       Jmp "error_not_number";
+       Mov (Reg RAX, imm_to_arg imm2) ;
+       Test (Reg RAX, Const 0x0001) ;
+       Jmp "error_not_number";
+       Mov (Reg RAX, imm_to_arg imm1) ; (* volver a copiar imm1 *)
        Add (Reg RAX, imm_to_arg imm2) ]
   | APrim2 (Mul, imm1, imm2, _) ->
      [ Mov (Reg RAX, imm_to_arg imm1) ;
+       Test (Reg RAX, Const 0x0001) ;
+       Jmp "error_not_number";
+       Mov (Reg RAX, imm_to_arg imm2) ;
+       Test (Reg RAX, Const 0x0001) ;
+       Jmp "error_not_number";
+       Mov (Reg RAX, imm_to_arg imm1) ; (* volver a copiar imm1 *)
        Mul (Reg RAX, imm_to_arg imm2) ;
        Sar (Reg RAX, Const 1) ]
   | APrim2 (Equal, imm1, imm2, tag) ->
@@ -134,6 +151,7 @@ and inst_to_string inst =
     | Jmp label -> "jmp " ^ label ^ "\n"
     | Label label -> label ^ ":\n"
     | Cmp (a1, a2) -> "cmp " ^ arg_to_string a1 ^ ", " ^ arg_to_string a2 ^ "\n"
+    | Test (a1, a2) -> "test " ^ arg_to_string a1 ^ ", " ^ arg_to_string a2 ^ "\n"
 
 and arg_to_string a =
   match a with
@@ -155,10 +173,24 @@ let compile_program (program : tag ast) : string =
 
   sprintf "
 section .text
+
+extern error
+
 global our_code_starts_here
 our_code_starts_here:
+  push RBP          ; save (previous, caller's) RBP on stack
+  mov RBP, RSP 
   %s
-  ret\n" asm_string;;
+  mov RSP, RBP      ; restore value of RSP to that just before call
+                    ; now, value at [RSP] is caller's (saved) RBP
+  pop RBP           ; so: restore caller's RBP from stack [RSP]
+  ret
+
+error_not_number:
+  mov rdi, 1
+  mov rsi, rax
+  call error
+\n" asm_string;;
 
 let tag (e : 'a ast) : tag ast =
   let rec help (e : 'a ast) (cur : tag) : (tag ast * tag) =
