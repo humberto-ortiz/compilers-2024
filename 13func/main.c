@@ -35,6 +35,20 @@ void error(int errCode, int val) {
   exit(errCode);
 }
 
+int max(int a, int b) {
+  if (a & BOOL_TAG) {
+    error(ERR_NOT_NUMBER, a);
+  }
+  if (b & BOOL_TAG) {
+    error(ERR_NOT_NUMBER, b);
+  } 
+  if (a > b) {
+    return a;
+  } else {
+    return b;
+  }
+}
+
 int main(int argc, char** argv) {
   int64_t result = our_code_starts_here();
   print(result);

@@ -32,3 +32,4 @@ expr:
   | LPAREN e1 = expr PLUS e2 = expr RPAREN {BinOp (e1, Add, e2, $startpos)}
   | LPAREN e1 = expr TIMES e2 = expr RPAREN {BinOp (e1, Mul, e2, $startpos)}
   | LPAREN e1 = expr EQUAL e2 = expr RPAREN {BinOp (e1, Equal, e2, $startpos)}
+  | LPAREN id = ID e1 = expr e2 = expr RPAREN { Call (id, e1, e2, $startpos) }

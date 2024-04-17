@@ -1,7 +1,7 @@
 open Printf
 open Ast
 
-type reg = RAX | RSP
+type reg = RAX | RSP | RDI | RSI
 
 type arg =
   | Reg of reg
@@ -18,6 +18,7 @@ type instruction =
   | Jnz of string
   | Jmp of string
   | Label of string
+  | Call of string
 
 type env = (string * int) list
 
@@ -56,6 +57,12 @@ let rec anf (e : tag ast) : tag aexpr =
        ALet (tmpvar1, anf e1,
              ALet (tmpvar2, anf e2,
                    APrim2 (op, ImmId tmpvar1, ImmId tmpvar2, tag), tag), tag)
+    | Call (f, e1, e2, tag) -> 
+       let tmpvar1 = sprintf "_call_l_%d" tag in
+       let tmpvar2 = sprintf "_call_r_%d" tag in
+       ALet (tmpvar1, anf e1,
+             ALet (tmpvar2, anf e2,
+                   ACall (f, ImmId tmpvar1, ImmId tmpvar2, tag), tag), tag)
 
 let const_true = -1
 let const_false = 1
@@ -133,6 +140,11 @@ let rec compile_expr (e : tag aexpr) (env : env) : instruction list =
        Mov (Reg RAX, Const const_false);
        Label ld
      ]
+  | ACall (f, i1, i2, _) ->
+     [ Mov (Reg RDI, imm_to_arg i1) ;
+       Mov (Reg RSI, imm_to_arg i2) ;
+       Call f
+     ]
   (* | _ -> failwith "no se compilar eso" *)
 
 
@@ -152,6 +164,7 @@ and inst_to_string inst =
     | Label label -> label ^ ":\n"
     | Cmp (a1, a2) -> "cmp " ^ arg_to_string a1 ^ ", " ^ arg_to_string a2 ^ "\n"
     | Test (a1, a2) -> "test " ^ arg_to_string a1 ^ ", " ^ arg_to_string a2 ^ "\n"
+    | Call f -> "call " ^ f ^ "\n"
 
 and arg_to_string a =
   match a with
@@ -163,6 +176,8 @@ and reg_to_string r =
   match r with
   | RAX -> "RAX"
   | RSP -> "RSP"
+  | RDI -> "RDI"
+  | RSI -> "RSI"
 
 (* A very sophisticated compiler - insert the given integer into the mov
 instruction at the correct place *)
@@ -175,6 +190,7 @@ let compile_program (program : tag ast) : string =
 section .text
 
 extern error
+extern max
 
 global our_code_starts_here
 our_code_starts_here:
@@ -217,6 +233,10 @@ let tag (e : 'a ast) : tag ast =
       let (tag_e1, next_tag) = help e1 (cur + 1) in
       let (tag_e2, next_tag) = help e2 (next_tag + 1) in
       (BinOp (tag_e1, op, tag_e2, cur), next_tag)
+    | Call (f, e1, e2, _) -> 
+      let (tag_e1, next_tag) = help e1 (cur + 1) in
+      let (tag_e2, next_tag) = help e2 (next_tag + 1) in
+      (Call (f, tag_e1, tag_e2, cur), next_tag)
   in
   let (tagged, _) = help e 1 in tagged;;
 
