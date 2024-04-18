@@ -1,0 +1,7 @@
+
+(def istwo (x y)
+     (if (2 == (x + y))
+         true
+         false))
+
+(istwo 5 -8)

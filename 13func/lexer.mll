@@ -28,5 +28,6 @@ rule read =
      | "=="  { EQUAL }
      | "true" { TRUE }
      | "false" { FALSE }
+     | "def" { DEF }
      | id   { ID (Lexing.lexeme lexbuf) }
      | _ { raise (SyntaxError ("Illegal character - " ^ Lexing.lexeme lexbuf)) }

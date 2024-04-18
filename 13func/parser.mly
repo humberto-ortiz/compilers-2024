@@ -15,9 +15,26 @@
 %token EQUAL
 %token TRUE
 %token FALSE
+%token DEF
 
-%start <'a Ast.ast> expr
+%start <'a Ast.program> program
 %%
+
+program:
+  | e = expr { Program ([], e) }
+  | ds = defs e = expr { Ast.Program (ds, e) }
+
+defs:
+  | d = defn { [ d ] }
+  | d = defn ds = defs { d::ds }
+
+args:
+  | { [] }
+  | id = ID args = args { id::args }
+
+defn:
+  | LPAREN DEF id = ID LPAREN args = args RPAREN body = expr RPAREN
+    { DFun (id, args, body, $startpos) }
 
 expr:
   | i = INT { Num (i, $startpos) }

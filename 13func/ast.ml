@@ -27,3 +27,11 @@ type 'a aexpr =
   | AIf of immexpr * 'a aexpr * 'a aexpr * 'a
   | ALet of string * 'a aexpr * 'a aexpr * 'a
   | ACall of string * immexpr * immexpr * 'a
+
+type 'a decl =
+  (* function name, argument names, body, tag *)
+  | DFun of string * string list * 'a ast * 'a
+
+type 'a program =
+  | Program of 'a decl list * 'a ast
+
