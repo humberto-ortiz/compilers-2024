@@ -179,11 +179,33 @@ and reg_to_string r =
   | RDI -> "RDI"
   | RSI -> "RSI"
 
+let anf_decl d =
+  match d with
+  | DFun (string, args, e, tag) ->
+     ADFun (string, args, anf e, tag)
+
+let rec anf_decls ds =
+  match ds with
+  | [] -> []
+  | d::ds -> (anf_decl d)::(anf_decls ds)
+     
+let anf_program (p : tag program) =
+  match p with
+  | Program (ds, e) ->
+     AProgram (anf_decls ds, anf e)
+
+let compile_decls ds =
+  
+let compile_aprogram p =
+  match p with
+  | AProgram (ds, e) ->
+     compile_decls ds @ compile_expr e []
+
 (* A very sophisticated compiler - insert the given integer into the mov
 instruction at the correct place *)
-let compile_program (program : tag ast) : string =
-  let anfed = anf program in
-  let instrs = compile_expr anfed [] in
+let compile_program (program : tag program) : string =
+  let anfed = anf_program program in
+  let instrs = compile_aprogram anfed [] in
   let asm_string = asm_to_string instrs in
 
   sprintf "
@@ -208,7 +230,24 @@ error_not_number:
   call error
 \n" asm_string;;
 
-let tag (e : 'a ast) : tag ast =
+let tag_decl (d, cur) =
+  match d with
+    | DFun (f, args, e, _) ->
+       (DFun (f, args, tag_ast e, cur), cur + 1)
+
+let rec tag_decls (ds : 'a decl list) cur : tag decl list = (* pichea *)
+  match ds with
+    | [] -> []
+    | d::ds ->
+       let (d_tag, next) = tag_decl (d, cur) in
+       d_tag::(tag_decls ds next)
+
+let tag_program (p : 'a program) : tag program =
+  match p with
+    | Program (decls, e) ->
+       Program (tag_decls decls 0, tag_ast e)
+
+and tag_ast (e : 'a ast) : tag ast =
   let rec help (e : 'a ast) (cur : tag) : (tag ast * tag) =
     match e with
     | Num (n, _) -> (Num (n, cur), cur + 1)
@@ -248,7 +287,7 @@ let () =
   close_in input_file;
   match maybe_program with
   | Ok input_program ->
-     let tagged = tag input_program in
+     let tagged = tag_program input_program in
      let program = (compile_program tagged) in
      printf "%s\n" program
   | Error e -> eprintf "%s" (Core.Error.to_string_hum e) ; exit 1
