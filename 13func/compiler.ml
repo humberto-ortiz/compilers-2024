@@ -1,7 +1,7 @@
 open Printf
 open Ast
 
-type reg = RAX | RSP | RDI | RSI
+type reg = RAX | RSP | RDI | RSI | RBP
 
 type arg =
   | Reg of reg
@@ -19,6 +19,9 @@ type instruction =
   | Jmp of string
   | Label of string
   | Call of string
+  | Push of arg
+  | Pop of arg
+  | Ret
 
 type env = (string * int) list
 
@@ -165,6 +168,9 @@ and inst_to_string inst =
     | Cmp (a1, a2) -> "cmp " ^ arg_to_string a1 ^ ", " ^ arg_to_string a2 ^ "\n"
     | Test (a1, a2) -> "test " ^ arg_to_string a1 ^ ", " ^ arg_to_string a2 ^ "\n"
     | Call f -> "call " ^ f ^ "\n"
+    | Push a -> "push " ^ arg_to_string a ^ "\n"
+    | Ret -> "ret\n"
+    | Pop a -> "pop " ^ arg_to_string a ^ "\n"
 
 and arg_to_string a =
   match a with
@@ -178,6 +184,7 @@ and reg_to_string r =
   | RSP -> "RSP"
   | RDI -> "RDI"
   | RSI -> "RSI"
+  | RBP -> "RBP"
 
 let anf_decl d =
   match d with
@@ -194,12 +201,26 @@ let anf_program (p : tag program) =
   | Program (ds, e) ->
      AProgram (anf_decls ds, anf e)
 
-let compile_decls ds =
-  
-let compile_aprogram p =
+let compile_decl d env =
+  match d with
+    | ADFun (f, _, e, _) ->
+       [ Label f;
+         Push (Reg RBP);
+         Mov (Reg RBP, Reg RSP) ] @
+       compile_expr e env @
+       [ Mov (Reg RSP, Reg RBP);
+         Pop (Reg RBP);
+         Ret ]
+
+let rec compile_decls ds env =
+  match ds with
+  | [] -> []
+  | d::ds -> compile_decl d env @ compile_decls ds env
+
+let compile_aprogram p env =
   match p with
   | AProgram (ds, e) ->
-     compile_decls ds @ compile_expr e []
+     compile_decls ds env @ compile_expr e env
 
 (* A very sophisticated compiler - insert the given integer into the mov
 instruction at the correct place *)
@@ -230,19 +251,19 @@ error_not_number:
   call error
 \n" asm_string;;
 
-let tag_decl (d, cur) =
+let rec tag_decl (d, cur) =
   match d with
     | DFun (f, args, e, _) ->
        (DFun (f, args, tag_ast e, cur), cur + 1)
 
-let rec tag_decls (ds : 'a decl list) cur : tag decl list = (* pichea *)
+and tag_decls (ds : 'a decl list) cur : tag decl list = (* pichea *)
   match ds with
     | [] -> []
     | d::ds ->
        let (d_tag, next) = tag_decl (d, cur) in
        d_tag::(tag_decls ds next)
 
-let tag_program (p : 'a program) : tag program =
+and tag_program (p : 'a program) : tag program =
   match p with
     | Program (decls, e) ->
        Program (tag_decls decls 0, tag_ast e)
