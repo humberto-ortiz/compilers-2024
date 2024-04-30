@@ -1,7 +1,7 @@
 open Printf
 open Ast
 
-type reg = RAX | RSP | RDI | RSI | RBP
+type reg = RAX | RSP | RDI | RSI | RBP | RDX | RCX
 
 type arg =
   | Reg of reg
@@ -33,7 +33,7 @@ let guardar_todos ((vs : string list), (env : env)) : (int list * env) =
   let rec help vs env slot_acc env_acc =
      match vs with
      | [] -> (slot_acc, env_acc)
-     | (v:vs) -> 
+     | (v::vs) -> 
         let (slot, env') = guardar (v, env) in
         help vs env (slot::slot_acc) env'
   in
@@ -195,6 +195,8 @@ and reg_to_string r =
   | RDI -> "RDI"
   | RSI -> "RSI"
   | RBP -> "RBP"
+  | RCX -> "RCX"
+  | RDX -> "RDX"
 
 let anf_decl d =
   match d with
@@ -211,13 +213,22 @@ let anf_program (p : tag program) =
   | Program (ds, e) ->
      AProgram (anf_decls ds, anf e)
 
-
+let take n xs =
+  let rec help n xs res =
+   match xs with
+    | [] -> res
+    | x::xs -> 
+      if n = 0 then res
+      else help (n-1) xs (x::res)
+  in List.rev (help n xs [])
 
 let put_slots slots =
   let places = [RDI; RSI; RDX; RCX] in (* lo arreglamos despues *)
-  if List.len slots > 4 then failwith "demasiados argumentos" else
-    let sources = List.of_seq (Seq.take (List.length slots) List.to_seq places) in
-    
+  if List.length slots > 4 then failwith "demasiados argumentos" else
+    let sources = take (List.length slots) places in
+   (* hacer algo con places y sources y map2? *)
+  []
+ 
 let compile_decl d env =
   match d with
     | ADFun (f, args, e, _) ->
