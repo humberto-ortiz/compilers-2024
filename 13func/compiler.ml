@@ -29,6 +29,16 @@ let guardar ((v : string), (env : env)) : (int * env) =
   let n = 1 + List.length(env) in
   (n, (v, n) :: env)
 
+let guardar_todos ((vs : string list), (env : env)) : (int list * env) =
+  let rec help vs env slot_acc env_acc =
+     match vs with
+     | [] -> (slot_acc, env_acc)
+     | (v:vs) -> 
+        let (slot, env') = guardar (v, env) in
+        help vs env (slot::slot_acc) env'
+  in
+  help vs env [] []
+
 let rec lookup (v, env) =
   match env with
   | [] -> failwith "No existe"
@@ -201,13 +211,23 @@ let anf_program (p : tag program) =
   | Program (ds, e) ->
      AProgram (anf_decls ds, anf e)
 
+
+
+let put_slots slots =
+  let places = [RDI; RSI; RDX; RCX] in (* lo arreglamos despues *)
+  if List.len slots > 4 then failwith "demasiados argumentos" else
+    let sources = List.of_seq (Seq.take (List.length slots) List.to_seq places) in
+    
 let compile_decl d env =
   match d with
-    | ADFun (f, _, e, _) ->
+    | ADFun (f, args, e, _) ->
+       let (slots, env') = guardar_todos (args, env) in
+       
        [ Label f;
          Push (Reg RBP);
          Mov (Reg RBP, Reg RSP) ] @
-       compile_expr e env @
+         put_slots slots @
+       compile_expr e env' @
        [ Mov (Reg RSP, Reg RBP);
          Pop (Reg RBP);
          Ret ]
