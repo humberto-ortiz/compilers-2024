@@ -30,14 +30,14 @@ let guardar ((v : string), (env : env)) : (int * env) =
   (n, (v, n) :: env)
 
 let guardar_todos ((vs : string list), (env : env)) : (int list * env) =
-  let rec help vs env slot_acc env_acc =
+  let rec help vs env slot_acc =
      match vs with
-     | [] -> (slot_acc, env_acc)
+     | [] -> (slot_acc, env)
      | (v::vs) -> 
         let (slot, env') = guardar (v, env) in
-        help vs env (slot::slot_acc) env'
+        help vs env' (slot::slot_acc)
   in
-  help vs env [] []
+  help vs env []
 
 let rec lookup (v, env) =
   match env with
@@ -97,12 +97,12 @@ let rec compile_expr (e : tag aexpr) (env : env) : instruction list =
   | AAdd1 (inc1, _) ->
      [ Mov (Reg RAX, imm_to_arg inc1) ; 
        Test (Reg RAX, Const 0x0001) ;
-       Jmp "error_not_number";
+       Jnz "error_not_number";
        Add (Reg RAX, Const 2) ]
   | ASub1 (dec1, _) ->
      [ Mov (Reg RAX, imm_to_arg dec1) ;
        Test (Reg RAX, Const 0x0001) ;
-       Jmp "error_not_number";
+       Jnz "error_not_number";
        Add (Reg RAX, Const ~-2) ] (* la representacion de -1 es -2 *)
   | ALet (let1, valor, valor2, _) ->
      let (slot, env') = guardar (let1, env) in
@@ -125,19 +125,19 @@ let rec compile_expr (e : tag aexpr) (env : env) : instruction list =
   | APrim2 (Add, imm1, imm2, _) ->
      [ Mov (Reg RAX, imm_to_arg imm1) ;
        Test (Reg RAX, Const 0x0001) ;
-       Jmp "error_not_number";
+       Jnz "error_not_number";
        Mov (Reg RAX, imm_to_arg imm2) ;
        Test (Reg RAX, Const 0x0001) ;
-       Jmp "error_not_number";
+       Jnz "error_not_number";
        Mov (Reg RAX, imm_to_arg imm1) ; (* volver a copiar imm1 *)
        Add (Reg RAX, imm_to_arg imm2) ]
   | APrim2 (Mul, imm1, imm2, _) ->
      [ Mov (Reg RAX, imm_to_arg imm1) ;
        Test (Reg RAX, Const 0x0001) ;
-       Jmp "error_not_number";
+       Jnz "error_not_number";
        Mov (Reg RAX, imm_to_arg imm2) ;
        Test (Reg RAX, Const 0x0001) ;
-       Jmp "error_not_number";
+       Jnz "error_not_number";
        Mov (Reg RAX, imm_to_arg imm1) ; (* volver a copiar imm1 *)
        Mul (Reg RAX, imm_to_arg imm2) ;
        Sar (Reg RAX, Const 1) ]
@@ -224,10 +224,12 @@ let take n xs =
 
 let put_slots slots =
   let places = [RDI; RSI; RDX; RCX] in (* lo arreglamos despues *)
+  let poner slot place =
+    Mov (RegOffset (RSP, ~-8 * slot), Reg place) in
   if List.length slots > 4 then failwith "demasiados argumentos" else
     let sources = take (List.length slots) places in
    (* hacer algo con places y sources y map2? *)
-  []
+    List.map2 poner slots sources
  
 let compile_decl d env =
   match d with
@@ -251,14 +253,15 @@ let rec compile_decls ds env =
 let compile_aprogram p env =
   match p with
   | AProgram (ds, e) ->
-     compile_decls ds env @ compile_expr e env
+     compile_decls ds env , compile_expr e env
 
 (* A very sophisticated compiler - insert the given integer into the mov
 instruction at the correct place *)
 let compile_program (program : tag program) : string =
   let anfed = anf_program program in
-  let instrs = compile_aprogram anfed [] in
-  let asm_string = asm_to_string instrs in
+  let defs, instrs = compile_aprogram anfed [] in
+  let main_string = asm_to_string instrs in
+  let defs_string = asm_to_string defs in
 
   sprintf "
 section .text
@@ -270,7 +273,7 @@ global our_code_starts_here
 our_code_starts_here:
   push RBP          ; save (previous, caller's) RBP on stack
   mov RBP, RSP 
-  %s
+  %s                ; el main
   mov RSP, RBP      ; restore value of RSP to that just before call
                     ; now, value at [RSP] is caller's (saved) RBP
   pop RBP           ; so: restore caller's RBP from stack [RSP]
@@ -280,7 +283,10 @@ error_not_number:
   mov rdi, 1
   mov rsi, rax
   call error
-\n" asm_string;;
+
+; las defs
+%s
+\n" main_string defs_string;;
 
 let rec tag_decl (d, cur) =
   match d with
